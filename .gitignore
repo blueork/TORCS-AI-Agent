@@ -177,4 +177,6 @@ cython_debug/
 *.xlsx
 *.csv
 *.acc
-*.acc
+
+# Ignore the torcs_server
+torcs_server/
