@@ -212,6 +212,10 @@ while not shutdownClient:
         manual_state["steer"] = steering
         manual_state["accel"] = accel
         manual_state["brake"] = brake
+
+        if accel == 1 and brake == 1:
+            manual_state["brake"] = 0
+
         # manual_state["gear_idx"] = gear_idx
         # manual_state["clutch"] == clutch
 
@@ -261,7 +265,7 @@ while not shutdownClient:
         #     manual_state['clutch'] = current_clutch
         #     manual_state['gear'] = current_gear
 
-        # manual_state['clutch'] = 0
+        manual_state['clutch'] = 0
         clutch_value = 0
         gear_value = manual_state['gear']
         speedX = int(parsed_data.get('speedX'))
@@ -315,7 +319,7 @@ while not shutdownClient:
         manual_state['gear'] = gear_value
 
         # cool_down -= 1
-        # print(manual_state) 
+        print(manual_state) 
 
         # csv_writer_2.writerow([parsed_data.get(k, "0") for k in ["accel", "brake", "gear", "steer"]])
         if manual_mode:
