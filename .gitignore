@@ -128,7 +128,6 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
 .venv
 env/
 venv/
@@ -180,3 +179,5 @@ cython_debug/
 
 # Ignore the torcs_server
 torcs_server/
+config.bat
+node_modules
