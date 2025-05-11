@@ -1,302 +1,7 @@
-# import sys
-# import argparse
-# import socket
-# import driver
-# import time
-# import csv
-# import re
-# from pynput import keyboard
-
-# # Argument Parsing
-# parser = argparse.ArgumentParser(description='Python client to connect to the TORCS SCRC server.')
-# parser.add_argument('--host', default='localhost', help='Host IP address')
-# parser.add_argument('--port', type=int, default=3001, help='Host port number')
-# parser.add_argument('--id', default='SCR', help='Bot ID')
-# parser.add_argument('--maxEpisodes', type=int, default=1, help='Max learning episodes')
-# parser.add_argument('--maxSteps', type=int, default=0, help='Max steps')
-# parser.add_argument('--stage', type=int, default=3, help='Stage')
-# parser.add_argument('--manual', action='store_true', help='Enable manual control mode')
-# args = parser.parse_args()
-
-# # Establish Socket Connection
-# print(f'Connecting to {args.host} on port {args.port}')
-# sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-# sock.settimeout(1.0)
-
-# shutdownClient = False
-# curEpisode = 0
-
-# d = driver.Driver(args.stage)
-# manual_mode = args.manual
-
-# manual_state = {"accel": 0.0, "brake": 0.0, "steer": 0.0, "gear": 1}
-
-# def build_send_string(state):
-#     return "".join(f"({key} {value})" for key, value in state.items())
-
-# def parse_received_data(buf):
-#     buf = buf.strip('()\x00')
-#     data = re.findall(r'\(([^)]+)\)', buf)
-
-#     parsed_data = {}
-#     for item in data:
-#         parts = item.split(' ')  
-#         key = parts[0]  
-#         values = parts[1:]
-
-#         try:
-#             if len(values) == 1:
-#                 parsed_data[key] = float(values[0]) if '.' in values[0] else int(values[0])
-#             else:
-#                 parsed_data[key] = [float(v) if '.' in v else int(v) for v in values]
-#         except ValueError:
-#             parsed_data[key] = values  
-
-#     return parsed_data
-
-# # Open CSV Files
-# sensor_csv = open('sensor_data.csv', mode='w', newline='')
-# sensor_writer = csv.writer(sensor_csv)
-# sensor_writer.writerow(["angle", "curLapTime", "damage", "distFromStart", "distRaced", "fuel", "gear", "lastLapTime", "racePos", "rpm", "speedX", "speedY", "speedZ", "trackPos", "z"])
-
-# actuator_csv = open('actuator_data.csv', mode='w', newline='')
-# actuator_writer = csv.writer(actuator_csv)
-# actuator_writer.writerow(["steer", "accel", "brake"])
-
-# def on_press(key):
-#     try:
-#         if key.char == 'w': manual_state["accel"] = 0.5
-#         elif key.char == 's': manual_state["brake"] = 0.5
-#         elif key.char == 'a': manual_state["steer"] = -0.1
-#         elif key.char == 'd': manual_state["steer"] = 0.1
-#     except AttributeError:
-#         pass
-
-# def on_release(key):
-#     try:
-#         if key.char in ['w', 's']: manual_state["accel"] = manual_state["brake"] = 0.0
-#         elif key.char in ['a', 'd']: manual_state["steer"] = 0.0
-#     except AttributeError:
-#         pass
-
-# if manual_mode:
-#     listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-#     listener.start()
-
-# while not shutdownClient:
-#     while True:
-#         try:
-#             sock.sendto((args.id + d.init()).encode(), (args.host, args.port))
-#             buf, _ = sock.recvfrom(1000)
-#             if '***identified***' in buf.decode(): break
-#         except socket.error:
-#             continue
-    
-#     while True:
-#         try:
-#             buf, _ = sock.recvfrom(1000)
-#             buf = buf.decode()
-#         except socket.error:
-#             continue
-        
-#         if '***shutdown***' in buf:
-#             d.onShutDown()
-#             shutdownClient = True
-#             break
-#         elif '***restart***' in buf:
-#             d.onRestart()
-#             break
-
-#         parsed_data = parse_received_data(buf)
-
-#         # Log Sensor Data
-#         sensor_writer.writerow([parsed_data.get(k, "0") for k in ["angle", "curLapTime", "damage", "distFromStart", "distRaced", "fuel", "gear", "lastLapTime", "racePos", "rpm", "speedX", "speedY", "speedZ", "trackPos", "z"]])
-#         sensor_csv.flush()
-
-#         # Determine Actuator Values
-#         if manual_mode:
-#             steer, accel, brake = manual_state["steer"], manual_state["accel"], manual_state["brake"]
-#         else:
-#             steer = parsed_data.get("steer", 0.0)
-#             accel = parsed_data.get("accel", 0.0)
-#             brake = parsed_data.get("brake", 0.0)
-
-#         # Log Actuator Data
-#         actuator_writer.writerow([steer, accel, brake])
-#         actuator_csv.flush()
-
-#         # Send Actuator Commands
-#         response = build_send_string(manual_state) if manual_mode else d.drive(buf)
-#         sock.sendto(response.encode(), (args.host, args.port))
-    
-#     curEpisode += 1
-#     if curEpisode == args.maxEpisodes:
-#         shutdownClient = True
-
-# sock.close()
-# sensor_csv.close()
-# actuator_csv.close()
-# if manual_mode: listener.stop()
-
-
-# import sys
-# import argparse
-# import socket
-# import driver
-# import time
-# import csv
-# import re
-# from pynput import keyboard
-
-# # Argument Parsing
-# parser = argparse.ArgumentParser(description='Python client to connect to the TORCS SCRC server.')
-# parser.add_argument('--host', action='store', dest='host_ip', default='localhost', help='Host IP address')
-# parser.add_argument('--port', action='store', type=int, dest='host_port', default=3001, help='Host port number')
-# parser.add_argument('--id', action='store', dest='id', default='SCR', help='Bot ID')
-# parser.add_argument('--maxEpisodes', action='store', dest='max_episodes', type=int, default=1, help='Max learning episodes')
-# parser.add_argument('--maxSteps', action='store', dest='max_steps', type=int, default=0, help='Max steps')
-# parser.add_argument('--track', action='store', dest='track', default=None, help='Track name')
-# parser.add_argument('--stage', action='store', dest='stage', type=int, default=3, help='Stage')
-# parser.add_argument('--manual', action='store_true', dest='manual', help='Enable manual control mode')
-# arguments = parser.parse_args()
-
-# # Establish Socket Connection
-# print(f'Connecting to {arguments.host_ip} on port {arguments.host_port}')
-# try:
-#     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-#     sock.settimeout(1.0)
-# except socket.error:
-#     print('Socket creation failed')
-#     sys.exit(-1)
-
-# shutdownClient = False
-# curEpisode = 0
-# verbose = True
-
-# d = driver.Driver(arguments.stage)
-# manual_mode = arguments.manual
-
-# # Manual Control State
-# manual_state = {"accel": 0.0, "brake": 0.0, "gear": 1, "steer": 0.0, "clutch": 0.0, "focus": 0, "meta": 0}
-
-# def build_send_string(state):
-#     return "".join(f"({key} {value})" for key, value in state.items())
-
-# def parse_received_data(buf):
-#     buf = buf.strip('()\x00')  # Clean received string
-#     data = re.findall(r'\(([^)]+)\)', buf)  # Extract key-value pairs
-
-#     parsed_data = {}
-#     for item in data:
-#         parts = item.split(' ')  
-#         key = parts[0]  
-#         values = parts[1:]  
-
-#         # Convert to appropriate types
-#         try:
-#             if len(values) == 1:
-#                 parsed_data[key] = float(values[0]) if '.' in values[0] else int(values[0])
-#             else:
-#                 parsed_data[key] = [float(v) if '.' in v else int(v) for v in values]
-#         except ValueError:
-#             parsed_data[key] = values  
-
-#     return parsed_data
-
-# # Open CSV Files
-# sensor_csv = open('sensor_data.csv', mode='w', newline='')
-# sensor_writer = csv.writer(sensor_csv)
-# sensor_writer.writerow(["angle", "curLapTime", "damage", "distFromStart", "distRaced", "fuel", "gear", "lastLapTime", "racePos", "rpm", "speedX", "speedY", "speedZ", "trackPos", "z"])
-
-# actuator_csv = open('actuator_data.csv', mode='w', newline='')
-# actuator_writer = csv.writer(actuator_csv)
-# actuator_writer.writerow(["steer", "accel", "brake"])
-
-# # Manual Mode Keyboard Controls
-# def on_press(key):
-#     try:
-#         if key.char == 'w': manual_state["accel"] = 0.5
-#         elif key.char == 's': manual_state["brake"] = 0.5
-#         elif key.char == 'a': manual_state["steer"] = -0.1
-#         elif key.char == 'd': manual_state["steer"] = 0.1
-#         elif key.char == 'q': manual_state["gear"] = max(manual_state["gear"] - 1, 1)
-#         elif key.char == 'e': manual_state["gear"] += 1
-#     except AttributeError:
-#         pass
-
-# def on_release(key):
-#     if key in [keyboard.Key.esc]: return False
-#     try:
-#         if key.char in ['w', 's']: manual_state["accel"] = manual_state["brake"] = 0.0
-#         elif key.char in ['a', 'd']: manual_state["steer"] = 0.0
-#     except AttributeError:
-#         pass
-
-# if manual_mode:
-#     listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-#     listener.start()
-
-# # Main Communication Loop
-# while not shutdownClient:
-#     while True:
-#         try:
-#             sock.sendto((arguments.id + d.init()).encode(), (arguments.host_ip, arguments.host_port))
-#             buf, _ = sock.recvfrom(1000)
-#             if '***identified***' in buf.decode(): break
-#         except socket.error:
-#             continue
-    
-#     while True:
-#         try:
-#             buf, _ = sock.recvfrom(1000)
-#             buf = buf.decode()
-#         except socket.error:
-#             continue
-        
-#         if '***shutdown***' in buf:
-#             d.onShutDown()
-#             shutdownClient = True
-#             break
-#         elif '***restart***' in buf:
-#             d.onRestart()
-#             break
-        
-#         parsed_data = parse_received_data(buf)
-
-#         # Log Sensor Data
-#         sensor_writer.writerow([parsed_data.get(k, "0") for k in ["angle", "curLapTime", "damage", "distFromStart", "distRaced", "fuel", "gear", "lastLapTime", "racePos", "rpm", "speedX", "speedY", "speedZ", "trackPos", "z", "opponents"]])
-
-
-#         # Determine Actuator Values
-#         if manual_mode:
-#             steer = manual_state["steer"]
-#             accel = manual_state["accel"]
-#             brake = manual_state["brake"]
-#         else:
-#             steer = float(re.search(r"\(steer ([\-0-9\.]+)\)", response).group(1)) if re.search(r"\(steer ([\-0-9\.]+)\)", response) else 0.0
-#             accel = float(re.search(r"\(accel ([\-0-9\.]+)\)", response).group(1)) if re.search(r"\(accel ([\-0-9\.]+)\)", response) else 0.0
-#             brake = float(re.search(r"\(brake ([\-0-9\.]+)\)", response).group(1)) if re.search(r"\(brake ([\-0-9\.]+)\)", response) else 0.0
-
-#         # Log Actuator Data
-#         actuator_writer.writerow([steer, accel, brake])
-
-#         # Send Actuator Commands
-#         response = build_send_string(manual_state) if manual_mode else d.drive(buf)
-#         sock.sendto(response.encode(), (arguments.host_ip, arguments.host_port))
-    
-#     curEpisode += 1
-#     if curEpisode == arguments.max_episodes:
-#         shutdownClient = True
-
-# # Close Files and Listener
-# sock.close()
-# sensor_csv.close()
-# actuator_csv.close()
-# if manual_mode: listener.stop()
-
-
-
 import sys
+
+sys.path.insert(1, '../model_1/')
+
 import argparse
 import socket
 import driver
@@ -306,9 +11,9 @@ from pynput import keyboard
 from pathlib import Path
 import torch
 import torch.nn as nn
-from torcsNet import TORCSNet
 import numpy as np
 import joblib
+from torcsNet import TORCSNet
 
 parser = argparse.ArgumentParser(description='Python client to connect to the TORCS SCRC server.')
 parser.add_argument('--host', action='store', dest='host_ip', default='localhost', help='Host IP address')
@@ -326,7 +31,7 @@ print(f'Connecting to {arguments.host_ip} on port {arguments.host_port}')
 try:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(1.0)
-    print('Connected')
+    print('Connected to WTORCS')
 except socket.error:
     print('Socket creation failed')
     sys.exit(-1)
@@ -437,7 +142,7 @@ num_brake_classes = 2  # e.g., {0, 1}
 num_gear_classes = 4 # e.g., {-1, 0, 1, 2, 3, 4, 5, 6}
 num_clutch_classes = 2
 model = TORCSNet(input_size, num_accel_classes, num_brake_classes, num_gear_classes, num_clutch_classes).to(device)
-model.load_state_dict(torch.load('./best_model_old.pt', map_location=device))
+model.load_state_dict(torch.load('../model_1/best_model_old.pt', map_location=device))
 model.eval()
 scaler = joblib.load('./scaler.pkl')
 game_start = True
@@ -472,30 +177,6 @@ while not shutdownClient:
 
         parsed_data = parse_received_data(buf)
 
-# sensor_cols = ['Angle', ' CurrentLapTime', ' Damage', ' DistanceFromStart', ' DistanceCovered', 
-#                 ' FuelLevel', ' LastLapTime', 'RacePosition', ' RPM', 
-#                ' SpeedX', ' SpeedY', ' SpeedZ', ' Track_1', 'Track_2', 'Track_3', 
-#                'Track_4', 'Track_5', 'Track_6', 'Track_7', 'Track_8', 'Track_9', 
-#                'Track_10', 'Track_11', 'Track_12', 'Track_13', 'Track_14', 'Track_15', 
-#                'Track_16', 'Track_17', 'Track_18', 'Track_19', 'TrackPosition', 
-#                 ' WheelSpinVelocity_1', 'WheelSpinVelocity_2', 'WheelSpinVelocity_3', 
-#                'WheelSpinVelocity_4', 'Z']
-        # input_features = [
-        #     parsed_data.get("angle", 0.0), parsed_data.get("currLapTime", 0.0), parsed_data.get("damage", 0.0),
-        #     parsed_data.get("distFromStart", 0.0), parsed_data.get("distRaced", 0.0), parsed_data.get("focus", 0.0),
-        #     parsed_data.get("fuel", 0.0), parsed_data.get("lastLapTime", 0.0), parsed_data.get("racePos", 0.0), 
-        #     parsed_data.get("rpm", 0.0),
-        #     parsed_data.get("speedX", 0.0), parsed_data.get("speedY", 0.0), parsed_data.get("speedZ", 0.0),
-        #     parsed_data.get("track", [0.0]*19), parsed_data.get("trackPos", 0.0),
-        #     parsed_data.get("wheelSpinVel", [0.0]*4)[0], parsed_data.get("z", 0.0)
-        #     # parsed.get("angle", 0.0), parsed.get("trackPos", 0.0),
-            
-        #     # parsed.get("rpm", 0.0), parsed.get("fuel", 0.0),
-        #     # parsed_data.get("wheelSpinVel", [0.0]*4)[0],  # optionally use avg or max
-        #     # parsed_data.get("wheelSpinVel", [0.0]*4)[1],
-        #     # parsed_data.get("wheelSpinVel", [0.0]*4)[2],
-        #     # parsed_data.get("wheelSpinVel", [0.0]*4)[3],
-        # ]
         key = ["angle", "distRaced", "lastLapTime", "rpm", "speedX", 
                 "speedY", "speedZ", "track", "trackPos", "wheelSpinVel", "z"]
         input_features = []
@@ -515,36 +196,10 @@ while not shutdownClient:
         except Exception as e:
             print(f"Scaler error: {e}")
             break
-        # normalized = []
 
-        # for k in key:
-        #     val = parsed_data.get(k, 0.0)
-        #     if isinstance(val, list):
-        #         # Example: track sensors range from 0 to 200
-        #         norm_vals = [min(1.0, v / 200.0) for v in val]
-        #         normalized.extend(norm_vals)
-        #     else:
-        #         if k == "speedX":
-        #             normalized.append(val / 300.0)  # Assuming 300 km/h max
-        #         elif k == "speedY":
-        #             normalized.append(val / 100.0)  # Side speed
-        #         elif k == "angle":
-        #             normalized.append(val / 3.1415)  # Normalize between -1 and 1
-        #         elif k == "rpm":
-        #             normalized.append(val / 10000.0)  # Scale based on max RPM
-        #         else:
-        #             normalized.append(val)
-
-        # input_tensor = torch.tensor(scaled_sensors, dtype=torch.float32).unsqueeze(0)
-                # Convert to tensor
+        # Convert to tensor
         inputs = torch.tensor(scaled_sensors, dtype=torch.float32).to(device)
 
-        # Predict using model
-        # with torch.no_grad():
-        #     shared_out = model.shared(input_tensor)
-        #     continuous_out = model.continuous_head(shared_out)
-        #     gear_logits = model.gear_head(shared_out)
-        #     clutch_logits = model.clutch_head(shared_out)
         with torch.no_grad():
             steering_out, accel_out, brake_out, gear_out, clutch_out = model(inputs)
 
@@ -572,8 +227,6 @@ while not shutdownClient:
         # print('steer : ' + str(steer))
         # print('brake : ' + str(brake))
         # print('accel : ' + str(accel))
-
-
 
         # Clip to valid ranges
         # manual_state["steer"] = float(np.clip(steer, -1.0, 1.0))
@@ -608,32 +261,14 @@ while not shutdownClient:
         #     manual_state['clutch'] = current_clutch
         #     manual_state['gear'] = current_gear
 
-            
-            
-    #         R['gear'] = 1
-    #         if S['speedX'] > 50:
-    #     R['gear'] = 2
-    # if S['speedX'] > 80:
-    #     R['gear'] = 3
-    # if S['speedX'] > 110:
-    #     R['gear'] = 4
-    # if S['speedX'] > 140:
-    #     R['gear'] = 5
-    # if S['speedX'] > 170:
-    #     R['gear'] = 6
-
-        
-
         # manual_state['clutch'] = 0
         clutch_value = 0
         gear_value = manual_state['gear']
         speedX = int(parsed_data.get('speedX'))
         
-        print(speedX)
-        print(parsed_data.get('trackPos'))
+        # print(speedX)
+        # print(parsed_data.get('trackPos'))
         # parsed_data.get('trackPos') >= -1.0 and parsed_data.get('trackPos') <= 1.0
-
-
 
         if speedX == 0 and parsed_data.get('gear') >= 1 and parsed_data.get('distRaced') > 0 and reverse_engaged == False and (parsed_data.get('trackPos') < -1 or parsed_data.get('trackPos') > 1):
             reverse_engaged = True
@@ -641,7 +276,7 @@ while not shutdownClient:
             gear_value = -1
             steering = 0
         elif reverse_engaged == True and parsed_data.get('trackPos') >= -1.0 and parsed_data.get('trackPos') <= 1.0:
-            print("Does it come in here?")
+            # print("Does it come in here?")
             reverse_engaged = False
             gear_value = 1
             clutch_value = 1
@@ -680,7 +315,7 @@ while not shutdownClient:
         manual_state['gear'] = gear_value
 
         # cool_down -= 1
-        print(manual_state) 
+        # print(manual_state) 
 
         # csv_writer_2.writerow([parsed_data.get(k, "0") for k in ["accel", "brake", "gear", "steer"]])
         if manual_mode:
