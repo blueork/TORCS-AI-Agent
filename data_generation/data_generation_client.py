@@ -17,7 +17,7 @@ if __name__ == "__main__":
         
         track = tracks
         print ('Track:',track)
-        for race_num in range(10,21):
+        for race_num in range(21,32):
             print ('Race Number:',race_num)
             full_cmd = list(cmd)
             full_cmd[-1] = full_cmd[-1] + track

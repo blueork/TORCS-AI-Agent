@@ -2,30 +2,29 @@ import torch
 import torch.nn as nn
 
 # Neural Network Model
+# Neural Network Model
 class TORCSNet(nn.Module):
-    def __init__(self, input_size, hidden_size, num_gear_classes, num_clutch_classes):
+    def __init__(self, input_size, num_accel_classes, num_brake_classes, num_gear_classes, num_clutch_classes=2):
         super(TORCSNet, self).__init__()
         self.shared = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
+            nn.Linear(input_size, 512),
             nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(hidden_size, hidden_size),
+            nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(hidden_size, hidden_size),  # Third hidden layer
+            nn.Linear(256, 128),        
             nn.ReLU()
-            # nn.Dropout(0.3)
         )
-        self.continuous_head = nn.Linear(hidden_size, 3)
-        self.gear_head = nn.Linear(hidden_size, num_gear_classes)
-        self.clutch_head = nn.Linear(hidden_size, num_clutch_classes)
-
+        self.steering_head = nn.Linear(128, 1)  # Steering (continuous, [-1, 1])
+        self.accel_head = nn.Linear(128, num_accel_classes)  # Acceleration (discrete)
+        self.brake_head = nn.Linear(128, num_brake_classes)  # Braking (discrete)
+        self.gear_head = nn.Linear(128, num_gear_classes)  # Gear (discrete)
+        self.clutch_head = nn.Linear(128, num_clutch_classes)  # Clutch (discrete)
+        
     def forward(self, x):
-        shared_features = self.shared(x)
-        continuous_out = self.continuous_head(shared_features)
-        accel_brake = torch.sigmoid(continuous_out[:, :2])  # [0, 1]
-        steering = torch.tanh(continuous_out[:, 2])         # [-1, 1]
-        continuous_out = torch.cat([accel_brake, steering.unsqueeze(1)], dim=1)
-        gear_out = self.gear_head(shared_features)
-        clutch_out = self.clutch_head(shared_features)
-        return continuous_out, gear_out, clutch_out
+        shared = self.shared(x)
+        steering_out = torch.tanh(self.steering_head(shared))  # [-1, 1]
+        accel_out = self.accel_head(shared)  # Logits
+        brake_out = self.brake_head(shared)  # Logits
+        gear_out = self.gear_head(shared)  # Logits
+        clutch_out = self.clutch_head(shared)  # Logits
+        return steering_out, accel_out, brake_out, gear_out, clutch_out

@@ -308,6 +308,7 @@ import torch
 import torch.nn as nn
 from torcsNet import TORCSNet
 import numpy as np
+import joblib
 
 parser = argparse.ArgumentParser(description='Python client to connect to the TORCS SCRC server.')
 parser.add_argument('--host', action='store', dest='host_ip', default='localhost', help='Host IP address')
@@ -422,9 +423,26 @@ if manual_mode:
     listener = keyboard.Listener(on_press=on_press, on_release=on_release)
     listener.start()
 
-model = TORCSNet(input_size=37, hidden_size=512, num_gear_classes=4, num_clutch_classes=2)
-model.load_state_dict(torch.load("best_model.pt", map_location=torch.device('cpu')))
+# Set random seed for reproducibility
+torch.manual_seed(42)
+np.random.seed(42)
+
+# Device configuration
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
+
+input_size = 32
+num_accel_classes = 2  # e.g., {0, 1}
+num_brake_classes = 2  # e.g., {0, 1}
+num_gear_classes = 4 # e.g., {-1, 0, 1, 2, 3, 4, 5, 6}
+num_clutch_classes = 2
+model = TORCSNet(input_size, num_accel_classes, num_brake_classes, num_gear_classes, num_clutch_classes).to(device)
+model.load_state_dict(torch.load('./best_model_old.pt', map_location=device))
 model.eval()
+scaler = joblib.load('./scaler.pkl')
+game_start = True
+cool_down = 700
+reverse_engaged = False
 
 while not shutdownClient:
     while True:
@@ -478,69 +496,190 @@ while not shutdownClient:
         #     # parsed_data.get("wheelSpinVel", [0.0]*4)[2],
         #     # parsed_data.get("wheelSpinVel", [0.0]*4)[3],
         # ]
-        key = ["angle", "curLapTime", "damage", "distFromStart", "distRaced",
-                "fuel", "lastLapTime", "racePos", "rpm", "speedX", 
+        key = ["angle", "distRaced", "lastLapTime", "rpm", "speedX", 
                 "speedY", "speedZ", "track", "trackPos", "wheelSpinVel", "z"]
         input_features = []
-
-        # for k in key:
-        #     val = parsed_data.get(k, 0.0)
-        #     if isinstance(val, list):
-        #         input_features.extend(val)
-        #     else:
-        #         input_features.append(val)
-        normalized = []
 
         for k in key:
             val = parsed_data.get(k, 0.0)
             if isinstance(val, list):
-                # Example: track sensors range from 0 to 200
-                norm_vals = [min(1.0, v / 200.0) for v in val]
-                normalized.extend(norm_vals)
+                input_features.extend(val)
             else:
-                if k == "speedX":
-                    normalized.append(val / 300.0)  # Assuming 300 km/h max
-                elif k == "speedY":
-                    normalized.append(val / 100.0)  # Side speed
-                elif k == "angle":
-                    normalized.append(val / 3.1415)  # Normalize between -1 and 1
-                elif k == "rpm":
-                    normalized.append(val / 10000.0)  # Scale based on max RPM
-                else:
-                    normalized.append(val)
+                input_features.append(val)
 
-        input_tensor = torch.tensor(normalized, dtype=torch.float32).unsqueeze(0)
+        if len(input_features) != 32:
+            raise ValueError(f"Expected 32 sensors, got {len(input_features)}")
+
+        try:
+            scaled_sensors = scaler.transform([input_features])
+        except Exception as e:
+            print(f"Scaler error: {e}")
+            break
+        # normalized = []
+
+        # for k in key:
+        #     val = parsed_data.get(k, 0.0)
+        #     if isinstance(val, list):
+        #         # Example: track sensors range from 0 to 200
+        #         norm_vals = [min(1.0, v / 200.0) for v in val]
+        #         normalized.extend(norm_vals)
+        #     else:
+        #         if k == "speedX":
+        #             normalized.append(val / 300.0)  # Assuming 300 km/h max
+        #         elif k == "speedY":
+        #             normalized.append(val / 100.0)  # Side speed
+        #         elif k == "angle":
+        #             normalized.append(val / 3.1415)  # Normalize between -1 and 1
+        #         elif k == "rpm":
+        #             normalized.append(val / 10000.0)  # Scale based on max RPM
+        #         else:
+        #             normalized.append(val)
+
+        # input_tensor = torch.tensor(scaled_sensors, dtype=torch.float32).unsqueeze(0)
+                # Convert to tensor
+        inputs = torch.tensor(scaled_sensors, dtype=torch.float32).to(device)
 
         # Predict using model
+        # with torch.no_grad():
+        #     shared_out = model.shared(input_tensor)
+        #     continuous_out = model.continuous_head(shared_out)
+        #     gear_logits = model.gear_head(shared_out)
+        #     clutch_logits = model.clutch_head(shared_out)
         with torch.no_grad():
-            shared_out = model.shared(input_tensor)
-            continuous_out = model.continuous_head(shared_out)
-            gear_logits = model.gear_head(shared_out)
-            clutch_logits = model.clutch_head(shared_out)
+            steering_out, accel_out, brake_out, gear_out, clutch_out = model(inputs)
 
-        csv_writer.writerow([parsed_data.get(k, "0") for k in ["angle", "curLapTime", "damage", "distFromStart", "distRaced", "focus",
-                                                             "fuel", "gear", "lastLapTime", "opponents", "racePos", "rpm", "speedX", 
-                                                             "speedY", "speedZ", "track", "trackPos", "wheelSpinVel", "z"]])
-        steer, brake, accel = continuous_out.squeeze().numpy()
-        gear = torch.argmax(gear_logits, dim=1).item()
-        clutch = torch.argmax(clutch_logits, dim=1).item()
+        steering = steering_out.item()  # [-1, 1]
+        accel = torch.argmax(accel_out, dim=1).item()  # e.g., 0 or 1
+        brake = torch.argmax(brake_out, dim=1).item()  # e.g., 0 or 1
+        gear_idx = torch.argmax(gear_out, dim=1).item()  # e.g., 0 to 7
+        clutch = torch.argmax(clutch_out, dim=1).item()  # e.g., 0 or 1
+
+        manual_state["steer"] = steering
+        manual_state["accel"] = accel
+        manual_state["brake"] = brake
+        # manual_state["gear_idx"] = gear_idx
+        # manual_state["clutch"] == clutch
+
+        print(f"Steering={steering:.4f}, Accel={accel}, Brake={brake}, Gear={gear_idx}, Clutch={clutch}")
+        
+        # csv_writer.writerow([parsed_data.get(k, "0") for k in ["angle", "curLapTime", "damage", "distFromStart", "distRaced", "focus",
+        #                                                      "fuel", "gear", "lastLapTime", "opponents", "racePos", "rpm", "speedX", 
+        #                                                      "speedY", "speedZ", "track", "trackPos", "wheelSpinVel", "z"]])
+        # steer, brake, accel = continuous_out.squeeze().numpy()
+        # gear = torch.argmax(gear_logits, dim=1).item()
+        # clutch = torch.argmax(clutch_logits, dim=1).item()
 
         # print('steer : ' + str(steer))
         # print('brake : ' + str(brake))
         # print('accel : ' + str(accel))
 
+
+
         # Clip to valid ranges
-        manual_state["steer"] = float(np.clip(steer, -1.0, 1.0))
-        manual_state["accel"] = float(np.clip(accel, 0.0, 1.0))
-        manual_state["brake"] = float(np.clip(brake, 0.0, 1.0))
-        manual_state["clutch"] = float(clutch)
+        # manual_state["steer"] = float(np.clip(steer, -1.0, 1.0))
+        # manual_state["accel"] = float(np.clip(accel, 0.0, 1.0))
+        # manual_state["brake"] = float(np.clip(brake, 0.0, 1.0))
+        # manual_state["clutch"] = float(clutch)
 
-        if manual_state["accel"] == 0:
-            manual_state["accel"] = 1
+        # if manual_state["accel"] == 0:
+        #     manual_state["accel"] = 1
 
-        if manual_state["clutch"] > 0.5:
-            manual_state["clutch"] = 1
+        # if manual_state["clutch"] > 0.5:
+        #     manual_state["clutch"] = 1
 
+        # print(manual_state) 
+
+        # manual_state['clutch'] = 0
+        # print(parsed_data.get('clutch'))
+        # if game_start == False and parsed_data.get('distRaced') > 100:
+        # # if cool_down <= 0 :
+        #     cool_down = 700
+        #     current_gear = parsed_data.get('gear')
+        #     current_rpm = parsed_data.get('rpm')
+        #     current_clutch = 0
+
+        #     if current_rpm >= 8500 :
+        #         current_gear = min(current_gear + 1, 6)
+        #         current_clutch = 1
+        #     elif current_rpm <= 1000 :
+        #         current_gear = max(current_gear - 1, -1)
+        #         current_clutch = 1
+        
+        #     manual_state['clutch'] = current_clutch
+        #     manual_state['gear'] = current_gear
+
+            
+            
+    #         R['gear'] = 1
+    #         if S['speedX'] > 50:
+    #     R['gear'] = 2
+    # if S['speedX'] > 80:
+    #     R['gear'] = 3
+    # if S['speedX'] > 110:
+    #     R['gear'] = 4
+    # if S['speedX'] > 140:
+    #     R['gear'] = 5
+    # if S['speedX'] > 170:
+    #     R['gear'] = 6
+
+        
+
+        # manual_state['clutch'] = 0
+        clutch_value = 0
+        gear_value = manual_state['gear']
+        speedX = int(parsed_data.get('speedX'))
+        
+        print(speedX)
+        print(parsed_data.get('trackPos'))
+        # parsed_data.get('trackPos') >= -1.0 and parsed_data.get('trackPos') <= 1.0
+
+
+
+        if speedX == 0 and parsed_data.get('gear') >= 1 and parsed_data.get('distRaced') > 0 and reverse_engaged == False and (parsed_data.get('trackPos') < -1 or parsed_data.get('trackPos') > 1):
+            reverse_engaged = True
+            clutch_value = 1
+            gear_value = -1
+            steering = 0
+        elif reverse_engaged == True and parsed_data.get('trackPos') >= -1.0 and parsed_data.get('trackPos') <= 1.0:
+            print("Does it come in here?")
+            reverse_engaged = False
+            gear_value = 1
+            clutch_value = 1
+        elif speedX <= 50 and gear_value == 2 :
+            gear_value = 1
+            clutch_value = 1
+        elif speedX <= 80 and gear_value == 3 :
+            gear_value = 2
+            clutch_value = 1
+        elif speedX <= 110 and gear_value == 4 :
+            gear_value = 3
+            clutch_value = 1            
+        elif speedX <= 140 and gear_value == 5 :
+            gear_value = 4
+            clutch_value = 1            
+        elif speedX <= 170 and gear_value == 6 :
+            gear_value = 5
+            clutch_value = 1            
+        elif speedX > 50 and gear_value == 1:
+            gear_value = 2
+            clutch_value = 1
+        elif speedX > 80 and gear_value == 2:
+            gear_value = 3
+            clutch_value = 1
+        elif speedX > 110 and gear_value == 3:
+            gear_value = 4
+            clutch_value = 1            
+        elif speedX > 140 and gear_value == 4:
+            gear_value = 5
+            clutch_value = 1
+        elif speedX > 170 and gear_value == 15:
+            gear_value = 6
+            clutch_value = 1            
+        
+        manual_state["clutch"] = clutch_value
+        manual_state['gear'] = gear_value
+
+        # cool_down -= 1
         print(manual_state) 
 
         # csv_writer_2.writerow([parsed_data.get(k, "0") for k in ["accel", "brake", "gear", "steer"]])
@@ -552,6 +691,8 @@ while not shutdownClient:
         else:
             actuator_data = [d.control.getAccel(), d.control.getBrake(), d.control.getGear(),
                      d.control.getSteer(), d.control.getClutch(), d.control.getFocus(), d.control.getMeta()]
+
+        game_start = False
 
         # Write actuator data to torcs_actuators.csv
         csv_writer_2.writerow(actuator_data)

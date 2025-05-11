@@ -89,7 +89,7 @@
   <section name="Preferences">
     <section name="Drivers">
       <section name="1">
-        <attstr name="transmission" in="auto,manual" val="auto"/>
+        <attstr name="transmission" in="auto,manual" val="manual"/>
         <attstr name="ABS on" in="yes,no" val="no"/>
         <attstr name="ASR on" in="yes,no" val="yes"/>
         <attnum name="programmed pit stops" val="0"/>
@@ -121,9 +121,9 @@
         <attstr name="ABS cmd" val="a"/>
         <attstr name="Speed Limiter" val="-"/>
         <attstr name="down shift" val="u"/>
-        <attstr name="clutch" val="m"/>
         <attstr name="reverse gear" val="r"/>
         <attstr name="up shift" val="i"/>
+        <attstr name="clutch" val="c"/>
       </section>
 
       <section name="2">

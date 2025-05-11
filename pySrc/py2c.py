@@ -304,6 +304,9 @@ import time
 import csv
 from pynput import keyboard
 from pathlib import Path
+import torch
+import torch.nn as nn
+# from model_training import TORCSNet
 
 parser = argparse.ArgumentParser(description='Python client to connect to the TORCS SCRC server.')
 parser.add_argument('--host', action='store', dest='host_ip', default='localhost', help='Host IP address')
@@ -321,6 +324,7 @@ print(f'Connecting to {arguments.host_ip} on port {arguments.host_port}')
 try:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(1.0)
+    print('Connected')
 except socket.error:
     print('Socket creation failed')
     sys.exit(-1)
@@ -400,7 +404,7 @@ def on_press(key):
         elif key.char == 'd': manual_state["steer"] = 0.1
         elif key.char == 'u': manual_state["gear"] = max(manual_state["gear"] - 1, 0)
         elif key.char == 'i': manual_state["gear"] = min(manual_state["gear"] + 1, 6)
-        elif key.char == 'm': manual_state["clutch"] = 1
+        elif key.char == 'c': manual_state["clutch"] = 1
     except AttributeError:
         pass
 
@@ -409,13 +413,17 @@ def on_release(key):
     try:
         if key.char in ['w', 's']: manual_state["accel"] = manual_state["brake"] = 0.0
         elif key.char in ['a', 'd']: manual_state["steer"] = 0.0
-        elif key.char in ['m']: manual_state["clutch"] = 0.0
+        elif key.char in ['c']: manual_state["clutch"] = 0.0
     except AttributeError:
         pass
 
 if manual_mode:
     listener = keyboard.Listener(on_press=on_press, on_release=on_release)
     listener.start()
+
+# model = TORCSNet(input_size=29, hidden_size=256, num_gear_classes=7, num_clutch_classes=2)
+# model.load_state_dict(torch.load("best_model.pt", map_location=torch.device('cpu')))
+# model.eval()
 
 while not shutdownClient:
     while True:
@@ -445,12 +453,14 @@ while not shutdownClient:
 
         parsed_data = parse_received_data(buf)
 
-        print(parsed_data.get("racePos"))
+        # print(parsed_data.get("racePos"))
 
         csv_writer.writerow([parsed_data.get(k, "0") for k in ["angle", "curLapTime", "damage", "distFromStart", "distRaced", "focus",
                                                              "fuel", "gear", "lastLapTime", "opponents", "racePos", "rpm", "speedX", 
                                                              "speedY", "speedZ", "track", "trackPos", "wheelSpinVel", "z"]])
         
+        print(manual_state)
+        print(parsed_data.get('trackPos'))
         # csv_writer_2.writerow([parsed_data.get(k, "0") for k in ["accel", "brake", "gear", "steer"]])
         if manual_mode:
             actuator_data = [

@@ -73,7 +73,7 @@ if __name__ == "__main__":
         write_xml(bs)
         display_xml()
         lastTrack = track
-        for race_num in range(10,21):
+        for race_num in range(21,32):
             print ('Race Number:',race_num)
             if (race_num) % 5 == 0:
                 swap_and_write(currentIdx)
