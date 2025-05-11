@@ -30,9 +30,9 @@ public class DriverControllerHelperE6 {
 //	public static List<Double> parametersValues = Arrays.asList(new Double []{0.6781902125919642, 0.4953233631206883, 58.84968402648872, 60.44019016167788, 133.25805193822336, 182.3068697036016, 1.0});
 	
 	public static int memorySensorLength = 1;
-	public static int[]  gearUp={8500,8500,8500,8500,8500,20000};
+	public static int[]  gearUp={6500,6500,6500,6500,6500,20000};
 //	public static int[]  gearUp={8500,8500,8000,8000,8000,0};
-	public static int[]  gearDown={0,3300,3300,3300,3300,3300};
+	public static int[]  gearDown={0,2300, 2300,2300,2300,2300};
 //	public static int[]  gearDown={0,3000,3000,3000,3000,3000};
 
 	public static double maxSensorRangeProximity = 200;

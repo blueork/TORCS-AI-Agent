@@ -44,9 +44,9 @@ if __name__ == "__main__":
     os.chdir(server_path)
     data_gen_path = '..\\data_generation\\'
     display_xml()
-    categories = ['dirt']
+    categories = ['road']
     mod_num = 0
-    lastTrack = 'dirt-2'
+    lastTrack = 'e-track-6'
 
     for i,category in enumerate(categories):
         print ('Category:',category)
@@ -57,11 +57,11 @@ if __name__ == "__main__":
             write_xml(bs)
             display_xml()
         # tracks = sorted(os.listdir(r'.\\tracks\\dirt\\dirt-2'))
-        tracks = 'dirt-2'
+        tracks = 'e-track-6'
         print("Tracks: ", tracks)
-        if category == 'road':
-            tracks.remove('e-track-1')
-            tracks.remove('e-track-2')
+        # if category == 'road':
+        #     tracks.remove('e-track-1')
+        #     tracks.remove('e-track-2')
         # for j,track in enumerate(tracks):
         track = tracks
         currentIdx = 1
@@ -73,7 +73,7 @@ if __name__ == "__main__":
         write_xml(bs)
         display_xml()
         lastTrack = track
-        for race_num in range(21,32):
+        for race_num in range(1,11):
             print ('Race Number:',race_num)
             if (race_num) % 5 == 0:
                 swap_and_write(currentIdx)
